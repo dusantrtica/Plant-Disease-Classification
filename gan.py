@@ -34,6 +34,7 @@ class Generator(nn.Module):
         return self.net(z)
 
 
+# Util class to reshape tensor
 class View(nn.Module):
     def __init__(self, shape):
         super().__init__()
@@ -44,6 +45,8 @@ class View(nn.Module):
 
 
 # -------- Discriminator / Classifier (N+1 outputs) --------
+# Discriminator outputs in our case 15 classes for real images +
+# one fake - as discriminator has to tell if the output is fake or not
 class DiscriminatorC(nn.Module):
     def __init__(self, num_classes_plus_fake: int):
         super().__init__()
@@ -70,6 +73,7 @@ class DiscriminatorC(nn.Module):
 
 
 # -------- Losses --------
+# Loss for discriminator training
 def d_loss_two_softmax(logits_real, y_real, logits_fake, fake_index):
     ce = nn.CrossEntropyLoss()
     loss_real = ce(logits_real, y_real)  # CE to true classes
@@ -80,19 +84,19 @@ def d_loss_two_softmax(logits_real, y_real, logits_fake, fake_index):
     return loss_real + loss_fake
 
 
+# Loss for generator 
 def g_loss_avoid_fake(logits_fake, fake_index, eps=1e-6):
     # minimize -log(1 - p_fake) == push probability mass away from FAKE
     p_fake = F.softmax(logits_fake, dim=1)[:, fake_index]
     return torch.mean(-torch.log(1.0 - p_fake + eps))
 
 
-# -------- Transforms (64x64 like the paper) --------
+# -------- Transforms (64x64 like in the paper) --------
 def make_transforms(use_segmentation: bool):
     return transforms.Compose([
         # SegmentationTransform(use_segmentation),
         transforms.Resize((64, 64)),
-        transforms.ToTensor(),                         # [0,1]
-        transforms.Normalize([0.5,0.5,0.5],[0.5,0.5,0.5])  # DCGAN-friendly [-1,1]
+        transforms.ToTensor(),        
     ])
 
 
@@ -120,8 +124,8 @@ def train_sgan(data_root="data", use_segmentation=False, z_dim=100, batch_size=6
     disc = DiscriminatorC(N+1).to(device)
     gen  = Generator(z_dim=z_dim).to(device)
 
-    d_opt = torch.optim.Adam(disc.parameters(), lr=lr, betas=(0.5,0.999))
-    g_opt = torch.optim.Adam(gen.parameters(),  lr=lr, betas=(0.5,0.999))
+    d_opt = torch.optim.Adam(disc.parameters(), lr=lr)
+    g_opt = torch.optim.Adam(gen.parameters(),  lr=lr)
 
     train_loader = DataLoader(train_ds,batch_size=batch_size,shuffle=True,num_workers=2)
     val_loader   = DataLoader(val_ds,batch_size=batch_size,shuffle=False,num_workers=2)
@@ -132,21 +136,30 @@ def train_sgan(data_root="data", use_segmentation=False, z_dim=100, batch_size=6
     # fixed noise for monitoring G’s progress
     z_fixed = torch.randn(32, z_dim, device=device)
 
-    for ep in range(1,epochs+1):
+    for ep in range(epochs):
+        # train mode for models
         disc.train(); gen.train()
         for x,y in train_loader:
             x,y = x.to(device), y.to(device)
-            # --- D step ---
+            # --- Train discriminator ---
             z = torch.randn(x.size(0), z_dim, device=device)
-            with torch.no_grad(): x_fake = gen(z)
+            with torch.no_grad():
+                x_fake = gen(z)
+
             logits_real, logits_fake = disc(x), disc(x_fake)
             loss_d = d_loss_two_softmax(logits_real,y,logits_fake,fake_index)
-            d_opt.zero_grad(); loss_d.backward(); d_opt.step()
-            # --- G step ---
+            d_opt.zero_grad()
+            loss_d.backward()
+            d_opt.step()
+
+            # --- Train generator ---
             z = torch.randn(x.size(0), z_dim, device=device)
             logits_fake_for_g = disc(gen(z))
             loss_g = g_loss_avoid_fake(logits_fake_for_g,fake_index)
-            g_opt.zero_grad(); loss_g.backward(); g_opt.step()
+
+            g_opt.zero_grad()
+            loss_g.backward()
+            g_opt.step()
 
         # --- Validation ---
         disc.eval(); acc.reset()
@@ -169,28 +182,6 @@ def train_sgan(data_root="data", use_segmentation=False, z_dim=100, batch_size=6
             acc.update(preds,y)
     print(f"SGAN Test acc: {acc.compute().item():.4f}")
 
-
-def split_dataset(raw_dir="PlantVillage", out_dir="data", train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
-    raw_dir = Path(raw_dir)
-    out_dir = Path(out_dir)
-    classes = [d.name for d in raw_dir.iterdir() if d.is_dir()]
-
-    for split in ["train","val","test"]:
-        for c in classes:
-            (out_dir/split/c).mkdir(parents=True, exist_ok=True)
-
-    for c in classes:
-        imgs = list((raw_dir/c).glob("*.jpg")) + list((raw_dir/c).glob("*.JPG")) + list((raw_dir/c).glob("*.png"))
-        random.shuffle(imgs)
-        n = len(imgs)
-        n_train = int(train_ratio*n)
-        n_val   = int(val_ratio*n)
-        train, val, test = imgs[:n_train], imgs[n_train:n_train+n_val], imgs[n_train+n_val:]
-        for split, subset in zip(["train","val","test"], [train,val,test]):
-            for img in subset:
-                shutil.copy(img, out_dir/split/c/img.name)
-
-split_dataset(raw_dir="PlantVillage/raw", out_dir="data")
 
 
 if __name__ == "__main__":

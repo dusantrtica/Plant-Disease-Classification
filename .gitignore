@@ -1,0 +1,9 @@
+*.pth
+*.png
+*.jpg
+*.jpeg
+
+data/
+__pycache__/
+conditional_generated_images/
+kaggle.json

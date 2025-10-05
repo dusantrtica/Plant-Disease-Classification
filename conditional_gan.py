@@ -3,11 +3,12 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
-from torchvision.datasets import ImageFolder
+from imageutils import remove_background_from
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 from PIL import Image
+import cv2
 import random
 from imageutils import (
     download_sample_data,
@@ -79,7 +80,10 @@ class PlantLeafDataset(Dataset):
         label = self.labels[idx]
 
         try:
-            image = Image.open(img_path).convert("RGB")
+            image = Image.open(img_path)  # .convert("RGB")
+            image = remove_background_from(image).convert("RGB")
+
+            # image = image_hsv_mask(image)
             if self.transform:
                 image = self.transform(image)
             return image, label
@@ -140,7 +144,6 @@ class ConditionalGenerator(nn.Module):
             nn.LeakyReLU(0.01, inplace=True),
             nn.Linear(4 * 4 * 64, num_classes),
         )
-
 
     def forward(self, noise, labels):
         # Embed labels

@@ -5,6 +5,7 @@ description = "Projekat za klasifikaciju bolesti biljaka koristeći duboko učen
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cv>=1.0.0",
     "kaggle>=1.7.4.5",
     "kagglehub>=0.3.13",
     "matplotlib>=3.10.6",

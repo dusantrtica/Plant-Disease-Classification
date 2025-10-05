@@ -1,12 +1,13 @@
 [project]
 name = "plant-disease-classification"
 version = "0.1.0"
-description = "Add your description here"
+description = "Projekat za klasifikaciju bolesti biljaka koristeći duboko učenje, generativne suparnične mreže (GAN)."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "kaggle>=1.7.4.5",
     "kagglehub>=0.3.13",
+    "matplotlib>=3.10.6",
     "opencv-python>=4.11.0.86",
     "scikit-image>=0.25.2",
     "torch>=2.8.0",

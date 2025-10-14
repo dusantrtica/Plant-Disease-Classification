@@ -23,3 +23,5 @@
 ## Poenta je u tome da imamo mali skup podataka i želimo da generativni deo (generator) pomogne u učenju razlikovanja klase slike
 
 ## SGAN se bolje ponaša od CNN kad imamo mali skup podataka, inače u slučaju da imamo dosta podataka, CNN ima prednost.
+
+https://docs.google.com/presentation/d/1WS9vGKvG5_9nvQMEQ9u6mjyjWyNtxYRkMvhvyWMque0/edit?usp=sharing

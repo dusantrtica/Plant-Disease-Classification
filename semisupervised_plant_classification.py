@@ -443,11 +443,11 @@ def evaluate_discriminator(name):
 
 
 def train_and_save_model():
-    generator, discriminator, G_losses, DC_losses = train_model()
-    save_model(discriminator, "dc_discriminator")
+    generator, discriminator, G_losses, DC_losses = train_model(num_epochs=10)
+    save_model(discriminator, "dc_discriminator")    
     plot_training_losses(G_losses, DC_losses)
 
 
 if __name__ == "__main__":
-    # train_and_save_model()
+    train_and_save_model()
     evaluate_discriminator("dc_discriminator")

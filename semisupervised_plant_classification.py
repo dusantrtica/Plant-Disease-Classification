@@ -63,7 +63,6 @@ class PlantLeafDataset(Dataset):
             for class_name in os.listdir(root_dir):
                 plant_sort = class_name.split("_")[0].lower()
 
-
                 class_path = os.path.join(root_dir, class_name)
                 if os.path.isdir(class_path):
                     # Odrediti da li je zdrav ili bolestan na osnovu imena klase
@@ -204,10 +203,11 @@ class DCDiscriminator(nn.Module):
         logits = self.classifier(features)
         return logits
 
+
 def discriminator_loss(logits_real, logits_fake, true_labels, softmax_loss):
     """
     Funkcija gubitka diskriminatora tačno kako je specificirana u radu
-    
+
     Iz rada:
     def discriminator_loss_for_mcgan(logits_real, logits_fake, true_labels, softmax_loss):
         Inputs:
@@ -218,54 +218,60 @@ def discriminator_loss(logits_real, logits_fake, true_labels, softmax_loss):
         N, C = logits_real.size()
         fake_labels = Variable((torch.zeros(N) + 23).type(dtype).long())
         return softmax_loss(logits_real, true_labels) + softmax_loss(logits_fake, fake_labels)
-    
+
     Gubitak diskriminatora sadrži zbir dve softmax funkcije:
     1. Jedna smanjuje negativnu log verovatnoću u odnosu na date labele pravih podataka
     2. Druga smanjuje negativnu log verovatnoću u odnosu na lažne labele lažnih podataka
     """
     N, C = logits_real.size()
-    
+
     # Kreirati lažne labele tačno kao u radu: Variable((torch.zeros(N) + 23).type(dtype).long())
     # U radu, 23 je bio indeks za lažnu klasu (imali su 57 pravih klasa + 1 lažna = 58 ukupno)
     # U našem slučaju, koristimo C-1 kao indeks lažne klase (poslednja klasa)
     fake_labels = (torch.zeros(N, device=logits_real.device) + (C + 1)).long()
-    
+
     # Vratiti zbir dve softmax funkcije kako je specificirano u radu
-    return softmax_loss(logits_real, true_labels) + softmax_loss(logits_fake, fake_labels)
+    return softmax_loss(logits_real, true_labels) + softmax_loss(
+        logits_fake, fake_labels
+    )
+
 
 def generator_loss(logits_fake, num_classes):
     """
-    Funkcija gubitka generatora 
+    Funkcija gubitka generatora
     Generator želi da diskriminator klasifikuje lažne slike kao prave klase (ne kao lažnu klasu)
     Cilj generatora je da prevari diskriminatora - tj da za lazne podatke
     diskriminator vrati da su pravi
-    
+
     Args:
         logits_fake: PyTorch Variable oblika (N, C+1) koji daje skorove za lažne podatke
         num_classes: Broj pravih klasa
-    
+
     Returns:
         Gubitak generatora
     """
     N = logits_fake.size(0)
-    
+
     # Generator želi da lažne slike budu klasifikovane kao bilo koja prava klasa (ne lažna)
     # Koristićemo uniformnu distribuciju preko pravih klasa
     # Ovo maksimizuje negativnu log verovatnoću kako je spomenuto u radu
-    
+
     # Kreirati uniformnu ciljnu distribuciju preko pravih klasa
     target_probs = torch.ones(N, num_classes, device=logits_fake.device) / num_classes
-    
+
     # Dobiti verovatnoće samo za prave klase (isključiti lažnu klasu)
     real_class_logits = logits_fake[:, :num_classes]
     real_class_probs = F.softmax(real_class_logits, dim=1)
-    
+
     # KL divergence gubitak da podstiče uniformnu distribuciju preko pravih klasa
-    loss = F.kl_div(F.log_softmax(real_class_logits, dim=1), target_probs, reduction='batchmean')
-    
+    loss = F.kl_div(
+        F.log_softmax(real_class_logits, dim=1), target_probs, reduction="batchmean"
+    )
+
     return loss
 
-def train_and_save_model(num_epochs=1, lr=0.0001, noise_dim=100):
+
+def train_model(num_epochs=1, lr=0.0001, noise_dim=100):
     """
     Obučiti Semi-Supervised GAN prateći Algoritam  iz rada
     """
@@ -284,10 +290,10 @@ def train_and_save_model(num_epochs=1, lr=0.0001, noise_dim=100):
     # Liste za praćenje napretka
     G_losses = []
     DC_losses = []
-    
+
     print("Počinje GAN petlja obučavanja...")
     print(f"Obučavanje za {num_epochs} epoha sa learning rate {lr}")
-    
+
     for epoch in range(num_epochs):
         for i, (real_data, real_labels) in enumerate(train_loader):
             batch_size = real_data.size(0)
@@ -297,24 +303,26 @@ def train_and_save_model(num_epochs=1, lr=0.0001, noise_dim=100):
             #  minimizovati DC funkciju gubitka
             ###########################
             discriminator.zero_grad()
-             # Pravi podaci
+            # Pravi podaci
             real_data = real_data.to(device)
             real_labels = real_labels.to(device)
-            
+
             # Forward pass kroz DC sa pravim podacima
             logits_real = discriminator(real_data)
 
             # Generisati lažne podatke
             noise = torch.randn(batch_size, noise_dim, device=device)
             fake_data = generator(noise)
-            
+
             # Forward pass kroz DC sa lažnim podacima
             # ali bez da "ucimo" generator
             logits_fake = discriminator(fake_data.detach())
 
             # Izračunati DC gubitak koristeći tačnu funkciju iz rada
             softmax_loss = nn.CrossEntropyLoss()
-            dc_loss = discriminator_loss(logits_real, logits_fake, real_labels, softmax_loss)
+            dc_loss = discriminator_loss(
+                logits_real, logits_fake, real_labels, softmax_loss
+            )
             dc_loss.backward()
             optimizerDC.step()
 
@@ -322,31 +330,34 @@ def train_and_save_model(num_epochs=1, lr=0.0001, noise_dim=100):
             # (2) Ažurirati Generator mrežu: maksimizovati log(Discriminator(G(z))) za prave klase
             ###########################
             generator.zero_grad()
-            
+
             # Generisati nove lažne podatke za ažuriranje generatora
             noise = torch.randn(batch_size, noise_dim, device=device)
             fake_data = generator(noise)
-            
+
             # Forward pass kroz DC sa novim lažnim podacima
             # ali ovog puta ne detachujemo, jer koeficijenti treba da se
             # azuriraju
             logits_fake_for_generator = discriminator(fake_data)
-            
+
             # Izračunati gubitak generatora
             g_loss = generator_loss(logits_fake_for_generator, num_classes)
             g_loss.backward()
             optimizerG.step()
-            
+
             # Ispisati statistike obučavanja
             if i % 50 == 0:
-                print(f'[{epoch}/{num_epochs}][{i}/{len(train_loader)}] '
-                      f'Loss_DC: {dc_loss.item():.4f} Loss_G: {g_loss.item():.4f}')
-            
+                print(
+                    f"[{epoch}/{num_epochs}][{i}/{len(train_loader)}] "
+                    f"Loss_DC: {dc_loss.item():.4f} Loss_G: {g_loss.item():.4f}"
+                )
+
             # Sačuvati gubitke za crtanje
             G_losses.append(g_loss.item())
             DC_losses.append(dc_loss.item())
-    
+
     return generator, discriminator, G_losses, DC_losses
+
 
 def plot_training_losses(G_losses, DC_losses):
     """Plotovati gubitke obučavanja"""
@@ -359,11 +370,84 @@ def plot_training_losses(G_losses, DC_losses):
     plt.legend()
     plt.show()
 
-def test_model():
-    pass
+
+def save_model(model, name):
+    torch.save(model.state_dict(), f"{name}.pth")
+
+
+def load_discriminator(name, num_channels, num_classes):
+    discriminator = DCDiscriminator(num_channels=num_channels, num_classes=num_classes).to(device)
+    discriminator.load_state_dict(torch.load(f"{name}.pth"))
+    return discriminator
+
+
+def evaluate_discriminator(name):
+    """
+    Evaluirati SGAN diskriminator/klasifikator na pravim test podacima
+    Evaluirati samo prave klase (isključiti lažnu klasu)
+    """
+
+    test_dataset = PlantLeafDataset("data/test", transform=transform_test)
+    num_classes = len(test_dataset.label_values)
+    test_loader = DataLoader(test_dataset)
+    discriminator = load_discriminator(name, num_channels=3, num_classes=num_classes)
+
+    discriminator.eval()
+    all_predictions = []
+    all_labels = []
+
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device)
+            logits = discriminator(images)
+
+            # Razmotriti samo prave klase (prvih num_classes izlaza)
+            real_class_logits = logits[:, :num_classes]
+            _, predicted = torch.max(real_class_logits, 1)
+
+            all_predictions.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    # Izračunati metrike
+    accuracy = accuracy_score(all_labels, all_predictions)
+
+    print(
+        f"\nTačnost SGAN Klasifikatora na test skupu: {accuracy:.4f} ({accuracy*100:.2f}%)"
+    )
+
+    # Detaljan izveštaj klasifikacije
+    class_names = test_dataset.label_values
+    print("\nDetaljan Izveštaj Klasifikacije:")
+    print(classification_report(all_labels, all_predictions, target_names=class_names))
+
+    # Matrica konfuzije
+    cm = confusion_matrix(all_labels, all_predictions)
+
+    # Plotovati matricu konfuzije
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=class_names,
+        yticklabels=class_names,
+    )
+    plt.title("SGAN Klasifikator - Matrica Konfuzije")
+    plt.ylabel("Prava Klasa")
+    plt.xlabel("Predviđena Klasa")
+    plt.savefig("sgan_confusion_matrix.png", dpi=150, bbox_inches="tight")
+    plt.show()
+
+    return accuracy, all_predictions, all_labels
+
+
+def train_and_save_model():
+    generator, discriminator, G_losses, DC_losses = train_model()
+    save_model(discriminator, "dc_discriminator")
+    plot_training_losses(G_losses, DC_losses)
 
 
 if __name__ == "__main__":
-    generator, discriminator, G_losses, DC_losses = train_and_save_model()
-    plot_training_losses(G_losses, DC_losses)
-    test_model()
+    # train_and_save_model()
+    evaluate_discriminator("dc_discriminator")

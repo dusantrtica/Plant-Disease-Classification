@@ -368,6 +368,7 @@ def plot_training_losses(G_losses, DC_losses):
     plt.xlabel("Iteracije")
     plt.ylabel("Gubitak")
     plt.legend()
+    plt.savefig('semisupervised_plant_classification.png')
     plt.show()
 
 
@@ -436,14 +437,14 @@ def evaluate_discriminator(name):
     plt.title("SGAN Klasifikator - Matrica Konfuzije")
     plt.ylabel("Prava Klasa")
     plt.xlabel("Predviđena Klasa")
-    plt.savefig("sgan_confusion_matrix.png", dpi=150, bbox_inches="tight")
+    plt.savefig("semisupervised_plant_classification_confusion_matrix.png", dpi=150, bbox_inches="tight")
     plt.show()
 
     return accuracy, all_predictions, all_labels
 
 
 def train_and_save_model():
-    generator, discriminator, G_losses, DC_losses = train_model(num_epochs=10)
+    generator, discriminator, G_losses, DC_losses = train_model(num_epochs=5)
     save_model(discriminator, "dc_discriminator")    
     plot_training_losses(G_losses, DC_losses)
 

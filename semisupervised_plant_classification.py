@@ -55,6 +55,8 @@ class PlantLeafDataset(Dataset):
 
         self.label_values = []
 
+        is_train = "train" in root_dir
+
         # Kategorije: 0 = zdrav, 1 = bolestan
         healthy_keywords = ["healthy"]
         disease_keywords = ["blight", "spot", "rust", "mold", "virus", "spot"]
@@ -65,6 +67,8 @@ class PlantLeafDataset(Dataset):
 
                 class_path = os.path.join(root_dir, class_name)
                 if os.path.isdir(class_path):
+                    total_files_in_dir = len(os.listdir(class_path))
+                    print(f"Files in {class_path}: {total_files_in_dir}")
                     # Odrediti da li je zdrav ili bolestan na osnovu imena klase
                     is_healthy = any(
                         keyword in class_name.lower() for keyword in healthy_keywords
@@ -80,7 +84,10 @@ class PlantLeafDataset(Dataset):
                     else:
                         continue  # preskočiti nepoznate kategorije
 
-                    for img_name in os.listdir(class_path):
+                    for i, img_name in enumerate(os.listdir(class_path)):
+                        # process only 1% of images for training
+                        if is_train and i > total_files_in_dir // 100:
+                            continue
                         if img_name.lower().endswith((".png", ".jpg", ".jpeg")):
                             self.images.append(os.path.join(class_path, img_name))
                             plant_label = f"{plant_sort}_{label}"
